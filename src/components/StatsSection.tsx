@@ -23,9 +23,10 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ isDarkMode = false }
 
   const fetchStats = async () => {
     try {
-      // التحقق من وجود Supabase
-      if (!supabase) {
-        console.error('Supabase not configured');
+      // Test connection first
+      const connectionOk = await testSupabaseConnection();
+      if (!connectionOk) {
+        console.error('Cannot connect to Supabase');
         return;
       }
       

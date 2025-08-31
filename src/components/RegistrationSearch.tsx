@@ -93,9 +93,10 @@ export const RegistrationSearch: React.FC<RegistrationSearchProps> = ({ isDarkMo
     await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
-      // التحقق من وجود Supabase
-      if (!supabase) {
-        setSearchError('خدمة البحث غير متاحة حالياً');
+      // Test connection first
+      const connectionOk = await testSupabaseConnection();
+      if (!connectionOk) {
+        setSearchError('لا يمكن الاتصال بقاعدة البيانات. تحقق من اتصال الإنترنت.');
         setSearchResult(null);
         return;
       }

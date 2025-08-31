@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-// Create Supabase client with proper CORS handling
+// Create Supabase client optimized for production deployment
 export const supabase = supabaseUrl && supabaseAnonKey 
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -13,21 +13,52 @@ export const supabase = supabaseUrl && supabaseAnonKey
       },
       global: {
         headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info'
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Client-Info': 'supabase-js-web'
         },
-        fetch: (url, options = {}) => {
-          return fetch(url, {
-            ...options,
-            mode: 'cors',
-            credentials: 'omit',
-            headers: {
-              ...options.headers,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
+        fetch: async (url, options = {}) => {
+          // Add retry logic for network issues
+          const maxRetries = 3;
+          let lastError;
+          
+          for (let i = 0; i < maxRetries; i++) {
+            try {
+              const response = await fetch(url, {
+                ...options,
+                mode: 'cors',
+                credentials: 'omit',
+                headers: {
+                  'apikey': supabaseAnonKey,
+                  'Authorization': `Bearer ${supabaseAnonKey}`,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'X-Client-Info': 'supabase-js-web',
+                  ...options.headers
+                }
+              });
+              
+              // If successful, return the response
+              if (response.ok || response.status < 500) {
+                return response;
+              }
+              
+              // If server error, retry
+              throw new Error(`Server error: ${response.status}`);
+            } catch (error) {
+              lastError = error;
+              console.warn(`Request attempt ${i + 1} failed:`, error);
+              
+              // Wait before retry (exponential backoff)
+              if (i < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+              }
             }
-          });
+          }
+          
+          throw lastError;
         }
       },
       db: {
