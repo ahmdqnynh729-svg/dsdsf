@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Result } from '../types';
 import { ChevronDown, ChevronUp, List, Filter, Clock, Calendar, AlertCircle, Lock, X } from 'lucide-react';
 import { getCategoryColor, getGradeColor } from '../utils/contestStats';
-import { supabase, isSupabaseConfigured, handleSupabaseError } from '../utils/supabase';
+import { supabase, isSupabaseConfigured, handleSupabaseError, testSupabaseConnection } from '../utils/supabase';
 
 interface AllResultsSectionProps {
   isDarkMode?: boolean;
@@ -55,15 +55,16 @@ export const AllResultsSection: React.FC<AllResultsSectionProps> = ({ isDarkMode
   
   // جلب النتائج من Supabase
   const fetchResults = async () => {
+    // Test connection first
+    const connectionOk = await testSupabaseConnection();
+    if (!connectionOk) {
+      console.error('Cannot connect to database');
+      setResults([]);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // التحقق من تكوين Supabase
-      if (!isSupabaseConfigured()) {
-        console.error('Supabase not properly configured');
-        setResults([]);
-        return;
-      }
-      
       const { data, error } = await supabase
         .from('results')
         .select('*')
@@ -71,7 +72,8 @@ export const AllResultsSection: React.FC<AllResultsSectionProps> = ({ isDarkMode
         .order('grade', { ascending: false });
 
       if (error) {
-        console.error('Error fetching results:', handleSupabaseError(error));
+        const errorMessage = handleSupabaseError(error);
+        console.error('Error fetching results:', errorMessage);
         setResults([]);
         return;
       }
@@ -81,7 +83,8 @@ export const AllResultsSection: React.FC<AllResultsSectionProps> = ({ isDarkMode
 
       setResults(formattedResults);
     } catch (error) {
-      console.error('Error fetching results:', handleSupabaseError(error));
+      const errorMessage = handleSupabaseError(error);
+      console.error('Error fetching results:', errorMessage);
       setResults([]);
     } finally {
       setIsLoading(false);

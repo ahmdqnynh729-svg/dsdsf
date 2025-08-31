@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, User, AlertTriangle } from 'lucide-react';
 import { Result } from '../types';
-import { supabase, isSupabaseConfigured, handleSupabaseError } from '../utils/supabase';
+import { supabase, isSupabaseConfigured, handleSupabaseError, testSupabaseConnection } from '../utils/supabase';
 
 interface SearchSectionProps {
   onSearch: (result: Result | null) => void;
@@ -46,10 +46,6 @@ export default function SearchSection({ onSearch, isDarkMode = false }: SearchSe
   // حساب الترتيب داخل الفئة
   const calculateRankInCategory = async (studentGrade: number, category: string) => {
     try {
-      if (!isSupabaseConfigured()) {
-        return 1;
-      }
-      
       const { data, error } = await supabase
         .from('results')
         .select('grade')
@@ -57,18 +53,26 @@ export default function SearchSection({ onSearch, isDarkMode = false }: SearchSe
         .gt('grade', studentGrade);
       
       if (error) {
-        console.error('Error calculating rank:', handleSupabaseError(error));
+        console.error('Error calculating rank:', error);
         return 1;
       }
       
       return (data?.length || 0) + 1;
     } catch (error) {
-      console.error('Error calculating rank:', handleSupabaseError(error));
+      console.error('Error calculating rank:', error);
       return 1;
     }
   };
 
   const handleSearch = async () => {
+    // Test connection first
+    const connectionOk = await testSupabaseConnection();
+    if (!connectionOk) {
+      setSearchError('لا يمكن الاتصال بقاعدة البيانات. تحقق من اتصال الإنترنت.');
+      onSearch(null);
+      return;
+    }
+
     // التحقق من أن الاسم يحتوي على 3 أحرف على الأقل
     const searchWords = getSearchTerms(searchTerm);
     
@@ -91,13 +95,6 @@ export default function SearchSection({ onSearch, isDarkMode = false }: SearchSe
     try {
       console.log('Searching for terms:', searchWords);
       
-      // التحقق من تكوين Supabase
-      if (!isSupabaseConfigured()) {
-        setSearchError('خدمة البحث غير متاحة حالياً');
-        onSearch(null);
-        return;
-      }
-      
       // البحث المتقدم: نبحث عن النتائج التي تحتوي على جميع الكلمات
       let query = supabase.from('results').select('*');
       
@@ -113,8 +110,9 @@ export default function SearchSection({ onSearch, isDarkMode = false }: SearchSe
       const { data, error } = await query.limit(10); // نأخذ أول 10 نتائج للمطابقة
       
       if (error) {
-        console.error('Search error:', handleSupabaseError(error));
-        setSearchError(handleSupabaseError(error));
+        const errorMessage = handleSupabaseError(error);
+        console.error('Search error:', errorMessage);
+        setSearchError(errorMessage);
         onSearch(null);
         return;
       }
@@ -172,8 +170,9 @@ export default function SearchSection({ onSearch, isDarkMode = false }: SearchSe
         onSearch(null);
       }
     } catch (error: any) {
-      console.error('Search error:', handleSupabaseError(error));
-      setSearchError(handleSupabaseError(error));
+      const errorMessage = handleSupabaseError(error);
+      console.error('Search error:', errorMessage);
+      setSearchError(errorMessage);
       onSearch(null);
     } finally {
       setIsLoading(false);
